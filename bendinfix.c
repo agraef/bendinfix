@@ -4,8 +4,7 @@
 #include <m_pd.h>
 
 static t_class *bendinfix_class;
-static int *legacy;
-static t_symbol **pdinfo_l2ork_version_s;
+static int *legacy, *legacy_bendin;
 static void (*nw_gui_vmess)(const char *sel, char *fmt, ...);
 
 typedef struct _bendinfix {
@@ -17,14 +16,16 @@ void bendinfix_float(t_bendinfix *x, t_floatarg f)
   // vanilla default:
   t_float g = 8192;
   // exported symbols by the different Pd flavors:
-  // legacy => pd-l2ork and purr-data
   // nw_gui_vmess => purr-data only
-  // pdinfo_l2ork_version_s => purr-data with revised vanilla-compatible
-  // bendin implementation
-  if (legacy && !pdinfo_l2ork_version_s)
-    // we always have a signed bendin with classic pd-l2ork (!nw_gui_vmess)
-    // for purr-data <= 2.13.0 (!pdinfo_l2ork_version_s) bendin is signed,
-    // unless -legacy flag is set
+  // legacy => pd-l2ork and purr-data
+  // legacy_bendin => purr-data with revised bendin implementation
+  if (legacy_bendin)
+    // signed bendin unless legacy_bendin is set
+    g = *legacy_bendin?8192:0;
+  else if (legacy)
+    // we always have a signed bendin with classic pd-l2ork (!nw_gui_vmess),
+    // whereas for purr-data without the revised bendin implementation
+    // (!legacy_bendin) bendin is signed, unless legacy is set
     g = !nw_gui_vmess?0:*legacy?8192:0;
   outlet_float(x->x_obj.ob_outlet, f-g);
 }
@@ -56,11 +57,11 @@ void bendinfix_setup(void) {
   class_addfloat(bendinfix_class, bendinfix_float);
 #ifdef WIN32
   legacy = (void*)GetProcAddress(GetModuleHandle("pd.dll"), "sys_legacy");
-  pdinfo_l2ork_version_s = (void*)GetProcAddress(GetModuleHandle("pd.dll"), "pdinfo_l2ork_version_s");
+  legacy_bendin = (void*)GetProcAddress(GetModuleHandle("pd.dll"), "sys_legacy_bendin");
   nw_gui_vmess = (void*)GetProcAddress(GetModuleHandle("pd.dll"), "gui_vmess");
 #else
   legacy = dlsym(RTLD_DEFAULT, "sys_legacy");
-  pdinfo_l2ork_version_s = dlsym(RTLD_DEFAULT, "pdinfo_l2ork_version_s");
+  legacy_bendin = dlsym(RTLD_DEFAULT, "sys_legacy_bendin");
   nw_gui_vmess = dlsym(RTLD_DEFAULT, "gui_vmess");
 #endif
 }
